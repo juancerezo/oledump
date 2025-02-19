@@ -1,0 +1,121 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+	"name": "oledump",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"dockerComposeFile": "docker-compose.yaml",
+	"workspaceFolder": "/workspace",
+	"service": "app-container",
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	"features": {
+		"ghcr.io/devcontainers/features/aws-cli": {}
+	},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": "sudo bash .devcontainer/postCreateCommand.sh",
+
+	// Configure tool-specific properties.
+	"customizations": {
+		"vscode": {			
+			
+			"settings": {
+				"python.testing.pytestArgs": [
+					"tests"
+				],
+
+				"python.testing.unittestEnabled": false,
+				"python.testing.pytestEnabled": true,
+				
+				"files.watcherExclude": {
+					"build/**": true,
+					"dist/**": true,
+					"data/**": true
+				},
+	
+				"explorer.autoReveal": "focusNoScroll",
+				"explorer.compactFolders": false,
+				
+				"files.exclude": {
+					"**/.git": true,
+					"**/.svn": true,
+					"**/.hg": true,
+					"**/CVS": true,
+					"**/.DS_Store": true,
+					"**/Thumbs.db": true,
+					"**.egg-info": true,
+					"**/__pycache__": true,
+					"build": true,
+					".VSCodeCounter": true
+				},
+
+				"files.autoSave": "onFocusChange",
+				"[python]": {
+					"editor.formatOnType": true,
+					"editor.defaultFormatter": "ms-python.black-formatter"
+				},
+				"python.analysis.diagnosticMode": "workspace",
+				"workbench.iconTheme": "material-icon-theme",
+				"workbench.colorTheme": "Default Dark+",
+				// "material-icon-theme.folders.associations": {},
+				"taskExplorer.exclude": [
+					"**/.vscode-test/**",
+					"**/Assets/**",
+					"**/bin/**",
+					"**/build/**",
+					"**/dist/**",
+					"**/doc/**",
+					"**/example/**",
+					"**/examples/**",
+					"**/ext/**",
+					"**/obj/**",
+					"**/out/**",
+					"**/output/**",
+					"**/packages/**",
+					"**/release/**",
+					"**/releases/**",
+					"**/samples/**",
+					"**/sdks/**",
+					"**/static/**",
+					"**/target/**",
+					"**/test/**",
+					"**/third_party/**",
+					"**/vendor/**",
+					"**/work/**",
+					"**.py"
+				],
+				"pylint.args": [
+					"--rcfile=.pylintrc"
+				]
+			},
+
+			"extensions": [
+				"ms-azuretools.vscode-docker",
+				"PKief.material-icon-theme",
+				"ms-python.python",
+				"ms-python.debugpy",
+				"ms-python.vscode-pylance",
+				"donjayamanne.python-environment-manager",
+				"njpwerner.autodocstring",
+				"aaron-bond.better-comments",
+				"ms-python.black-formatter",
+				"VisualStudioExptTeam.vscodeintellicode",
+				"VisualStudioExptTeam.intellicode-api-usage-examples",
+				"ms-python.isort",
+				"mohsen1.prettify-json",
+				"tamasfe.even-better-toml",
+				"spmeesseman.vscode-taskexplorer",
+				"github.vscode-github-actions",
+				"GitHub.vscode-pull-request-github",
+				"redhat.vscode-yaml",
+				"eamodio.gitlens"
+			]
+		}
+	}
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+}

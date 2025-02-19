@@ -1,0 +1,105 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oledump"
+description = "oledump ready to use and cli optimized. A fork of https://blog.didierstevens.com/programs/oledump-py/"
+dynamic = ["version"]
+readme = "README.md"
+requires-python = ">=3.12"
+license-files = ["LICENSE"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+authors = [
+    {name = "Juan Cerezo", email = "jcerezo.dev@proton.me"},
+]
+
+dependencies = [
+
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest",
+]
+
+lint = [
+  "black",
+  "pylint",
+  "pyright",
+  "isort",
+  "autoflake",
+  "radon"
+]
+
+dev = [
+    "pre-commit",
+    "oledump[test]",
+    "oledump[lint]",
+]
+
+ci = [
+  "pre-commit",
+  "oledump[test]",
+  "oledump[lint]"
+]
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["oledump"]
+# namespaces = true
+
+[tool.setuptools.dynamic]
+version = {attr = "oledump.__version__"}
+
+[tool.pyright]
+typeCheckingMode = "standard"
+useLibraryCodeForTypes = true
+verboseOutput = false
+ignore = [
+    ".git",
+    "**/__pycache__",
+    "**/\\.*",
+    "node_modules",
+    "build",
+    "data",
+]
+
+[tool.black]
+line-length = 100
+force-exclude = """
+/(
+\\.git
+| build
+| node_modules
+| .*\\.draft.py
+| data
+)/
+"""
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
+
+[tool.autoflake]
+ignore-init-module-imports = true
+remove-all-unused-imports = true
+remove-duplicate-keys = true
+in-place = true
+recursive = true
+# exclude = ""
+
+
+
+# ... other project metadata fields as specified in:
+#     https://packaging.python.org/en/latest/specifications/declaring-project-metadata/

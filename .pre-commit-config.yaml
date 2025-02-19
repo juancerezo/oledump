@@ -1,0 +1,44 @@
+repos:
+  - repo: local
+    hooks:
+      - id: autoflake
+        name: autoflake
+        description: "Sanitize imports with autoflake"
+        entry: autoflake
+        language: system
+        minimum_pre_commit_version: 2.9.2
+        require_serial: true
+        types_or: [python, pyi]
+      - id: isort
+        name: isort
+        description: "Sort imports consistently"
+        entry: isort
+        language: system
+        minimum_pre_commit_version: 2.9.2
+        require_serial: true
+        types_or: [python, pyi]
+      - id: black
+        name: black
+        description: "Code formatting with Black"
+        entry: black
+        language: python
+        minimum_pre_commit_version: 2.9.2
+        require_serial: true
+        types_or: [python, pyi]
+      - id: pyright
+        name: pyright
+        description: "Verify syntax errors with PyRight"
+        entry: pyright
+        language: system
+        minimum_pre_commit_version: 2.9.2
+        require_serial: true
+        types_or: [python, pyi]
+      - id: pylint
+        name: pylint
+        description: "Verify syntax errors with pylint"
+        entry: pylint
+        language: system
+        minimum_pre_commit_version: 2.9.2
+        require_serial: true
+        types_or: [python, pyi]
+      
