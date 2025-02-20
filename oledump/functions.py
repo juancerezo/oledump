@@ -315,12 +315,7 @@ def LookupCodepage(codepage):
     else:
         return ''
 
-def MyRepr(stringArg):
-    stringRepr = repr(stringArg)
-    if "'" + stringArg + "'" != stringRepr:
-        return stringRepr
-    else:
-        return stringArg
+
 
 def FindAll(data, sub):
     result = []
@@ -1117,44 +1112,15 @@ def OLESub(ole, data, prefix, rules, options):
 
     return (returnCode, selectionCounter)
 
-def YARACompile(ruledata):
-    if ruledata.startswith('#'):
-        if ruledata.startswith('#h#'):
-            rule = binascii.a2b_hex(ruledata[3:])
-        elif ruledata.startswith('#b#'):
-            rule = binascii.a2b_base64(ruledata[3:])
-        elif ruledata.startswith('#s#'):
-            rule = 'rule string {strings: $a = "%s" ascii wide nocase condition: $a}' % ruledata[3:]
-        elif ruledata.startswith('#q#'):
-            rule = ruledata[3:].replace("'", '"')
-        elif ruledata.startswith('#x#'):
-            rule = 'rule hexadecimal {strings: $a = { %s } condition: $a}' % ruledata[3:]
-        elif ruledata.startswith('#r#'):
-            rule = 'rule regex {strings: $a = /%s/ ascii wide nocase condition: $a}' % ruledata[3:]
-        else:
-            rule = ruledata[1:]
-        return yara.compile(source=rule, externals={'streamname': '', 'VBA': False}), rule
-    else:
-        dFilepaths = {}
-        if os.path.isdir(ruledata):
-            for root, dirs, files in os.walk(ruledata):
-                for file in files:
-                    filename = os.path.join(root, file)
-                    dFilepaths[filename] = filename
-        else:
-            for filename in ProcessAt(ruledata):
-                dFilepaths[filename] = filename
-        return yara.compile(filepaths=dFilepaths, externals={'streamname': '', 'VBA': False}), ','.join(dFilepaths.values())
+import yara
+
+
 
 def PrintWarningSelection(select, selectionCounter):
     if select != '' and selectionCounter == 0:
         print('Warning: no stream was selected with expression %s' % select)
 
-def CreateZipFileObject(arg1, arg2):
-    if 'AESZipFile' in dir(zipfile):
-        return zipfile.AESZipFile(arg1, arg2)
-    else:
-        return zipfile.ZipFile(arg1, arg2)
+
 
 
 dSpecialHashes = {'crc32': cHashCRC32, 'checksum8': cHashChecksum8}

@@ -1,5 +1,5 @@
-def FindAll(data: bytes, sub: bytes):
-    result = []
+def find_all(data: bytes, sub: bytes) -> list[int]:
+    result: list[int] = []
     start = 0
     while True:
         position = data.find(sub, start)

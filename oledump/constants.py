@@ -1,9 +1,29 @@
+from enum import IntEnum
+
+__all__ = [
+    "OLEFILE_MAGIC",
+    "ACTIVEMIME_MAGIC",
+    "REGEX_STANDARD",
+    "CUTTERM_NOTHING",
+    "CUTTERM_POSITION",
+    "CUTTERM_FIND",
+    "CUTTERM_LENGTH",
+    "ExitCode",
+]
+
 DUMPLINELENGTH = 16
-MALWARE_PASSWORD = 'infected'
-OLEFILE_MAGIC = b'\xD0\xCF\x11\xE0'
-ACTIVEMIME_MAGIC = b'ActiveMime'
-REGEX_STANDARD = b'[\x09\x20-\x7E]'
+MALWARE_PASSWORD = "infected"
+OLEFILE_MAGIC = b"\xD0\xCF\x11\xE0"
+ACTIVEMIME_MAGIC = b"ActiveMime"
+REGEX_STANDARD = b"[\x09\x20-\x7E]"
 CUTTERM_NOTHING = 0
 CUTTERM_POSITION = 1
 CUTTERM_FIND = 2
 CUTTERM_LENGTH = 3
+
+
+class ExitCode(IntEnum):
+    NO_ERROR = 0
+    UNKNOWN_ERROR = 1
+    PLUGIN_ERROR = 2
+    DECODER_ERROR = 3

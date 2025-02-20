@@ -1,29 +1,19 @@
 import importlib
 import sys
+import zipfile
 
-from typing import TypedDict
+from typing import Generator
 from pathlib import Path
+from io import BytesIO
+
+import olefile
 
 from oledump import plugins as plugins_module
-from oledump.utils import IfWIN32SetBinary
-from oledump.utils import FindAll
+from oledump import utils
+from oledump import constants
+from oledump.classes import cPluginMetaclass
 
-class OleDumpOptions(TypedDict):
-    vdadecompress: bool
-    vbadecompresscorrupt: bool
-    vbadecompressskipattributes: bool
-    plugins: list[str]
-    plugindir: Path
-    decoders: str
-    decoderdir: str
-    raw: bool
-    verbose: bool
-    quiet: bool
-    jsonoutput: bool
-    yara: str
-    password: str
-    find: str
-    select: str
+from .options import OleDumpOptions
 
 
 class OLEDump:
@@ -35,11 +25,11 @@ class OLEDump:
         self.plugins = []
         self.pluginsOle = []
         self.decoders = []
-    
+
     def load_plugins(self, *, plugins: list[str], plugindir: Path | None, verbose: bool):
         if plugindir is None:
             plugindir = Path(list(plugins_module.__path__)[0])
-        
+
         for plugin in plugins:
             try:
                 self.plugins.append(importlib.import_module(plugin))
@@ -47,48 +37,99 @@ class OLEDump:
                 print(f"Error importing plugin: {plugin}")
                 if verbose:
                     raise e
-    
-    def __run_raw(self, filename: Path | None, options: OleDumpOptions) -> tuple[int, str]:
+
+    def __run_raw(
+        self, filename: Path | None, options: OleDumpOptions
+    ) -> Generator[tuple[constants.ExitCode, str | None], None, None]:
         if filename is None:
-            IfWIN32SetBinary(sys.stdin)
+            utils.if_win32_setbinary(sys.stdin)
             data = sys.stdin.buffer.read()
         else:
             data = filename.read_bytes()
-        
+
         if options["vdadecompress"]:
-            positions = FindAll(data, b"\x00Attribut\x00e ")
-            vba = ""
+            positions = utils.find_all(data, b"\x00Attribut\x00e ")
+            vba = b""
             if options["vbadecompresscorrupt"]:
                 for position in positions:
-                    result = SearchAndDecompress(
-                        data[position - 3 :],
-                        None,
-                        skipAttributes=options["vbadecompressskipattributes"],
+                    result, error = utils.search_and_decompress(
+                        data=data[position - 3 :],
+                        ignore_errors=True,
+                        skip_attributes=options["vbadecompressskipattributes"],
                     )
-                    if result != None:
+
+                    if error == None and result is not None:
                         vba += result
             else:
                 for position in positions:
-                    result = (
-                        SearchAndDecompress(
-                            data[position - 3 :], skipAttributes=options["vbadecompressskipattributes"]
-                        )
-                        + "\n\n"
+                    result, error = utils.search_and_decompress(
+                        data=data[position - 3 :],
+                        skip_attributes=options["vbadecompressskipattributes"],
                     )
-                    if result != None:
+
+                    if error == None and result is not None:
                         vba += result
 
-        return 0, ""
+            if len(options["plugins"]) == 0:
+                yield constants.ExitCode.NO_ERROR, vba.decode(errors="ignore")
+                return
 
-            
+            data = vba
+
+        for cPlugin in cPluginMetaclass.plugins():
+            oPlugin = None
+
+            try:
+                if cPlugin.macroOnly:
+                    oPlugin = cPlugin(
+                        filename=filename, data=data, options=options["pluginoptions"]
+                    )
+                elif not cPlugin.macroOnly:
+                    oPlugin = cPlugin(
+                        filename=filename, data=data, options=options["pluginoptions"]
+                    )
+                else:
+                    oPlugin = None
+
+            except Exception as e:
+                if options["verbose"]:
+                    raise e
+
+                yield constants.ExitCode.PLUGIN_ERROR, f"Error instantiating plugin: {repr(cPlugin)}"
+
+            if oPlugin is not None:
+                result = oPlugin.analize()
+                if oPlugin.ran:
+                    if options["quiet"]:
+                        for line in result:
+                            yield constants.ExitCode.NO_ERROR, utils.my_repr(line)
+
+                    else:
+                        yield constants.ExitCode.NO_ERROR, f"Plugin: {repr(oPlugin)}"
+                        for line in result:
+                            yield constants.ExitCode.NO_ERROR, f" {utils.my_repr(line)}"
+
+        yield constants.ExitCode.NO_ERROR, ""
+
+    def __run_ole(
+        self,
+        *,
+        ole: olefile.OleFileIO,
+        data: bytes,
+        prefix: str,
+        rules: list | None,
+        options: OleDumpOptions,
+    ) -> Generator[tuple[constants.ExitCode, str | None], None, None]:
+        pass
+
     def __call__(
         self,
         *,
         filename: Path | None,
         options: OleDumpOptions,
-    ) -> tuple[int, str]:
-        return_code = 0
-        
+    ) -> Generator[tuple[constants.ExitCode, str | None], None, None]:
+        return_code = constants.ExitCode.NO_ERROR
+
         self.load_plugins(
             plugins=options["plugins"],
             plugindir=options["plugindir"],
@@ -96,21 +137,68 @@ class OLEDump:
         )
 
         if filename is not None and not filename.exists():
-            return -1, f"Error: {filename} doesn't exists."
-        
+            yield constants.ExitCode.UNKNOWN_ERROR, f"Error: {filename} doesn't exists."
+            return
+
         if filename is not None and not filename.is_file():
-            return -1, f"Error: {filename} is not a file."
-        
+            yield constants.ExitCode.UNKNOWN_ERROR, f"Error: {filename} is not a file."
+            return
+
         if options["raw"]:
-            return self.__run_raw(filename, options)
-        
+            yield from self.__run_raw(filename, options)
+            return
 
-        
+        rules = None
+        if options["yara"]:
+            rules = utils.yara_compile(options["yara"])
+
+        if filename is None:
+            utils.if_win32_setbinary(sys.stdin)
+            data_io = BytesIO(sys.stdin.buffer.read())
+
+        elif filename.suffix.lower() == ".zip":
+            zip_file = zipfile.ZipFile(str(filename), "r")
+            zip_content = zip_file.open(
+                zip_file.infolist()[0], "r", utils.c2bip3(options["password"])
+            )
+
+            data_io = BytesIO(zip_content.read())
+            zip_content.close()
+            zip_file.close()
+
+        else:
+            data_io = BytesIO(filename.read_bytes())
+
+        if options["find"]:
+            file_content = data_io.read()
+            locations = utils.find_all(file_content, constants.OLEFILE_MAGIC)
+
+            if len(locations) == 0:
+                yield constants.ExitCode.NO_ERROR, "No embedded OLE files found"
+                return
+
+            if options["find"] == "l":
+                yield constants.ExitCode.NO_ERROR, "Position of potential embedded OLE files:"
+                for index, position in enumerate(locations):
+                    yield constants.ExitCode.NO_ERROR, f" {index + 1} 0x{position:08x}"
+                return
+
+            try:
+                index = int(options["find"])
+            except ValueError:
+                yield constants.ExitCode.UNKNOWN_ERROR, f"Wrong index, must be between 1 and {len(locations)}"
+                return
+
+            if index <= 0 or index > len(locations):
+                yield constants.ExitCode.UNKNOWN_ERROR, f"Wrong index, must be between 1 and {len(locations)}"
+                return
+
+            ole = olefile.OleFileIO(BytesIO(file_content[locations[int(options["find"]) - 1] :]))
+            return_code, selection_counter = self.__run_ole(ole, b"", "", rules, options)
+
+        yield return_code, ""
 
 
-        return 0, ""
-
-    
 def OLEDump_(filename, options):
     returnCode = 0
 
@@ -130,7 +218,7 @@ def OLEDump_(filename, options):
 
     if options.raw:
         if filename == "":
-            IfWIN32SetBinary(sys.stdin)
+            if_win32_setbinary(sys.stdin)
             if sys.version_info[0] > 2:
                 data = sys.stdin.buffer.read()
             else:
@@ -138,11 +226,11 @@ def OLEDump_(filename, options):
         else:
             data = File2String(filename)
         if options.vbadecompress:
-            positions = FindAll(data, b"\x00Attribut\x00e ")
+            positions = find_all(data, b"\x00Attribut\x00e ")
             vba = ""
             if options.vbadecompresscorrupt:
                 for position in positions:
-                    result = SearchAndDecompress(
+                    result = search_and_decompress(
                         data[position - 3 :],
                         None,
                         skipAttributes=options.vbadecompressskipattributes,
@@ -152,7 +240,7 @@ def OLEDump_(filename, options):
             else:
                 for position in positions:
                     result = (
-                        SearchAndDecompress(
+                        search_and_decompress(
                             data[position - 3 :], skipAttributes=options.vbadecompressskipattributes
                         )
                         + "\n\n"
@@ -203,7 +291,7 @@ def OLEDump_(filename, options):
             print(rulesVerbose)
 
     if filename == "":
-        IfWIN32SetBinary(sys.stdin)
+        if_win32_setbinary(sys.stdin)
         if sys.version_info[0] > 2:
             oStringIO = DataIO(sys.stdin.buffer.read())
         else:
@@ -225,7 +313,7 @@ def OLEDump_(filename, options):
 
     if options.find != "":
         filecontent = oStringIO.read()
-        locations = FindAll(filecontent, OLEFILE_MAGIC)
+        locations = find_all(filecontent, OLEFILE_MAGIC)
         if len(locations) == 0:
             print("No embedded OLE files found")
         else:

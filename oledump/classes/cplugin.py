@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from typing import Iterable, Any
+from pathlib import Path
 
 class cPluginMetaclass(type):
     __plugins: list[type["cPluginParent"]] = []
@@ -19,23 +20,25 @@ class cPluginMetaclass(type):
                     raise TypeError(
                         f"Can't create new class {name} with no abstract classmethod {method_name} redefined in the metaclass"
                     )
-            
+
             if base is cDecoderParent:
-                cls.__decoders.append(cls) # type: ignore
-            
+                cls.__decoders.append(cls)  # type: ignore
+
             if base is cPluginParent:
-                cls.__plugins.append(cls) # type: ignore
+                cls.__plugins.append(cls)  # type: ignore
 
         return super(cPluginMetaclass, cls).__init__(name, bases, clsdict)
     
+    def __repr__(self) -> str:
+        return self.__name__
+
     @classmethod
     def plugins(cls):
         return cls.__plugins
-    
+
     @classmethod
     def decoders(cls):
         return cls.__decoders
-    
 
 
 class cDecoderParent(metaclass=cPluginMetaclass):
@@ -47,23 +50,48 @@ class cDecoderParent(metaclass=cPluginMetaclass):
     def decode(self) -> bytes:
         pass
 
-class cPluginParent(metaclass=cPluginMetaclass):
-    macroOnly = False
-    indexQuiet = False
 
+class cPluginParent(metaclass=cPluginMetaclass):
+    macroOnly: bool = False
+    indexQuiet: bool = False
+    ran: bool
+    ole: Path | None
+    data: bytes
+    options: str
+
+    def __init__(self, *, filename: Path | None, data: bytes, options: str):
+        self.ole = filename
+        self.data = data
+        self.options = options
+        self.ran = False
+        pass
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}"
+    
     @abstractmethod
     def analize(self) -> Iterable[Any]:
         pass
 
-class cPluginParentOle(object):
+
+class cPluginParentOle(metaclass=cPluginMetaclass):
     macroOnly = False
     indexQuiet = False
+    ran: bool
+    ole: Path | None
+    data: bytes
+    options: str
 
-    def __init__(self, ole, data, options):
-        self.ole = ole
+
+    def __init__(self, filename: Path | None, data: bytes, options: str):
+        self.ole = filename
         self.data = data
         self.options = options
+        self.ran = False
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}"
+    
     @abstractmethod
     def pre_process(self) -> None:
         pass

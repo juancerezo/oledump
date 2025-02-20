@@ -1,5 +1,7 @@
-from .p23ord import P23Ord
 import math
+import re
+
+from .__p23ord import p23ord
 
 def OffsetBits(data: bytes) -> int:
     numberOfBits = int(math.ceil(math.log(len(data), 2)))
@@ -11,7 +13,7 @@ def OffsetBits(data: bytes) -> int:
 
 def ParseTokenSequence(data: bytes) -> tuple[list[bytes], bytes]:
 
-    flags = P23Ord(data[0])
+    flags = p23ord(data[0])
     data = data[1:]
     result: list[bytes] = []
 
@@ -26,17 +28,17 @@ def ParseTokenSequence(data: bytes) -> tuple[list[bytes], bytes]:
 
     return result, data
 
-def DecompressChunk(compressedChunk) -> tuple[bytes, bytes] | tuple[None, None]:
+def DecompressChunk(compressedChunk: bytes) -> tuple[bytes | None, bytes]:
     if len(compressedChunk) < 2:
-        return None, None
+        return None, b''
     
-    header = P23Ord(compressedChunk[0]) + P23Ord(compressedChunk[1]) * 0x100
+    header = p23ord(compressedChunk[0]) + p23ord(compressedChunk[1]) * 0x100
     size = (header & 0x0FFF) + 3
     flagCompressed = header & 0x8000
     data = compressedChunk[2:2 + size - 2]
 
     if flagCompressed == 0:
-        return data.decode(errors='ignore'), compressedChunk[size:]
+        return data, compressedChunk[size:]
 
     decompressedChunk: bytes = b''
     while len(data) != 0:
@@ -49,10 +51,10 @@ def DecompressChunk(compressedChunk) -> tuple[bytes, bytes] | tuple[None, None]:
 
             else:
                 if decompressedChunk == b'':
-                    return None, None
+                    return None, b''
                 
                 numberOfOffsetBits = OffsetBits(decompressedChunk)
-                copyToken = P23Ord(token[0]) + P23Ord(token[1]) * 0x100
+                copyToken = p23ord(token[0]) + p23ord(token[1]) * 0x100
 
                 offset = 1 + (copyToken >> (16 - numberOfOffsetBits))
                 length = 3 + (((copyToken << numberOfOffsetBits) & 0xFFFF) >> numberOfOffsetBits)
@@ -72,50 +74,54 @@ def DecompressChunk(compressedChunk) -> tuple[bytes, bytes] | tuple[None, None]:
 
     return decompressedChunk, compressedChunk[size:]
 
-def Decompress(compressedData: bytes, replace=True):
+def Decompress(compressedData: bytes, replace=True) -> tuple[bool, bytes | None]:
 
-    if P23Ord(compressedData[0]) != 1:
+    if p23ord(compressedData[0]) != 1:
         return (False, None)
     
     remainder: bytes = compressedData[1:]
-    decompressed = ''
+    decompressed = b''
 
-    while len(remainder) != 0:
+    while remainder and len(remainder) != 0:
         decompressedChunk, remainder = DecompressChunk(remainder)
         if decompressedChunk == None:
             return (False, decompressed)
+        
         decompressed += decompressedChunk
+
     if replace:
-        return (True, decompressed.replace('\r\n', '\n'))
+        return (True, decompressed.replace(b'\r\n', b'\n'))
     else:
         return (True, decompressed)
 
-def FindCompression(data: bytes):
+def FindCompression(data: bytes) -> int:
     return data.find(b'\x00Attribut\x00e ')
 
-def SearchAndDecompressSub(data: bytes):
+def SearchAndDecompressSub(data: bytes) -> tuple[bool, bytes | None]:
     position = FindCompression(data)
     if position == -1:
-        return (False, '')
+        return (False, b'')
     else:
         compressedData = data[position - 3:]
     return Decompress(compressedData)
 
-def SkipAttributes(text):
-    oAttribute = re.compile('^Attribute VB_.+? = [^\n]+\n')
+def SkipAttributes(data: bytes) -> bytes:
+    oAttribute = re.compile(b'^Attribute VB_.+? = [^\n]+\n')
     while True:
-        oMatch = oAttribute.match(text)
+        oMatch = oAttribute.match(data)
         if oMatch == None:
             break
-        text = text[len(oMatch.group()):]
-    return text
+        data = data[len(oMatch.group()):]
 
-def SearchAndDecompress(data, ifError='Error: unable to decompress\n', skipAttributes=False):
+    return data
+
+def search_and_decompress(*, data: bytes, ignore_errors: bool = False, skip_attributes: bool =False) -> tuple[bytes | None, str | None]:
     result, decompress = SearchAndDecompressSub(data)
-    if result or ifError == None:
-        if skipAttributes:
-            return SkipAttributes(decompress)
+    if result or ignore_errors is True:
+        if skip_attributes and decompress is not None:
+            return SkipAttributes(decompress), None
         else:
-            return decompress
+            return decompress, None
+        
     else:
-        return ifError
+        return None, 'Error: unable to decompress\n'
